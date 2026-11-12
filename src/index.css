@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 247 248 251;
+  --surface: 255 255 255;
+  --elevated: 255 255 255;
+  --border: 228 232 240;
+  --text: 15 23 42;
+  --muted: 100 116 139;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: 8 11 18;
+  --surface: 15 20 31;
+  --elevated: 20 27 42;
+  --border: 33 42 60;
+  --text: 226 232 240;
+  --muted: 148 163 184;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-edge;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-ink antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply tracking-tight;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500/40 ring-offset-2 ring-offset-canvas;
+  }
+
+  input[type='date']::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+  }
+
+  .dark input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.6;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-edge bg-surface shadow-card;
+  }
+
+  .input-base {
+    @apply w-full rounded-xl border border-edge bg-surface px-3.5 py-2.5 text-sm text-ink shadow-sm outline-none transition placeholder:text-muted/70 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .label-base {
+    @apply mb-1.5 block text-xs font-medium text-muted;
+  }
+
+  .table-head {
+    @apply text-left text-[11px] font-semibold uppercase tracking-wider text-muted;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgb(var(--border));
+    border-radius: 999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+.recharts-cartesian-axis-tick-value {
+  fill: rgb(var(--muted));
+  font-size: 11px;
+}
+
+.recharts-cartesian-grid line {
+  stroke: rgb(var(--border));
+  stroke-opacity: 0.7;
+}
+
+.recharts-tooltip-cursor {
+  fill: rgb(var(--muted) / 0.06);
+}
+
+.dark .recharts-tooltip-cursor {
+  fill: rgb(var(--muted) / 0.12);
+}
