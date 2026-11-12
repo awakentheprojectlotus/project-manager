@@ -4,7 +4,7 @@ import { useProjectStore } from './projectStore';
 import { useTaskStore } from './taskStore';
 import { useTeamStore } from './teamStore';
 import { useUiStore } from './uiStore';
-import { requestGemini } from '../services/apiService';
+import { requestAi } from '../services/apiService';
 import { buildWorkspaceContext } from '../services/workspaceContext';
 import { interpretLocally, getLocalWelcome } from '../services/aiEngine';
 import {
@@ -36,6 +36,7 @@ export const useChatStore = create(
   persist(
     (set, get) => ({
       messages: [welcomeMessage()],
+      conversationId: uid('conv'),
       isThinking: false,
       lastEngine: null,
       lastNotice: null,
@@ -66,18 +67,24 @@ export const useChatStore = create(
 
         try {
           const context = buildWorkspaceContext();
-          outcome = await requestGemini({ history, context });
+          outcome = await requestAi({ history, context, sessionId: get().conversationId });
         } catch (err) {
           outcome = interpretLocally(text);
           outcome.engine = 'local';
           notice =
             err?.code === 'NOT_CONFIGURED'
-              ? 'Gemini is not configured on the server — answered with the built-in local engine.'
-              : err?.code === 'LOCATION_NOT_SUPPORTED'
-                ? 'Gemini is unavailable from this server’s location (Google restricts the API by region). The local engine answered. Use a system-wide VPN/proxy in a supported country or host the API proxy there.'
-                : err?.code === 'MODEL_UNAVAILABLE'
-                  ? `${err.message} The local engine answered instead.`
-                  : `Gemini is unavailable (${err?.message || 'network error'}) — answered with the local engine.`;
+              ? 'AI is not configured on the server — answered with the built-in local engine. Add OPENCODE_API_KEY to .env and restart.'
+              : err?.code === 'AUTH_ERROR'
+                ? 'The AI provider rejected the API key (check OPENCODE_API_KEY). The local engine answered.'
+                : err?.code === 'INSUFFICIENT_CREDITS'
+                  ? 'The AI provider has no credits left. Add credits in OpenCode Console; the local engine answered.'
+                  : err?.code === 'RATE_LIMITED'
+                    ? 'The AI provider is rate-limiting requests. Try again shortly; the local engine answered.'
+                    : err?.code === 'LOCATION_NOT_SUPPORTED'
+                      ? 'Gemini is unavailable from this server’s location (Google restricts the API by region). The local engine answered. Switch to OpenCode or use a supported-region proxy.'
+                      : err?.code === 'MODEL_UNAVAILABLE'
+                        ? `${err.message} The local engine answered instead.`
+                        : `AI service is unavailable (${err?.message || 'network error'}) — answered with the local engine.`;
         }
 
         const current = snapshot();
@@ -183,6 +190,7 @@ export const useChatStore = create(
       clearConversation: () => {
         set({
           messages: [welcomeMessage()],
+          conversationId: uid('conv'),
           isThinking: false,
           lastEngine: null,
           lastNotice: null,
@@ -198,6 +206,7 @@ export const useChatStore = create(
           : persisted,
       partialize: (state) => ({
         messages: state.messages,
+        conversationId: state.conversationId,
         lastEngine: state.lastEngine,
         lastNotice: state.lastNotice,
       }),

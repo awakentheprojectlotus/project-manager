@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckSquare, Plus, Trash2, X } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
@@ -7,7 +7,10 @@ import { useUiStore } from '../../stores/uiStore';
 import { useTaskStore } from '../../stores/taskStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTeamStore } from '../../stores/teamStore';
-import { PRIORITIES, TASK_STATUSES } from '../../constants';
+import { PRIORITIES, TASK_CATEGORIES, TASK_CATEGORY_MAP, TASK_STATUSES } from '../../constants';
+import { useProjectCategoryStore } from '../../stores/projectCategoryStore';
+import { getProjectCategories } from '../../utils/projectCategories';
+import { getTaskCategory } from '../../utils/categories';
 import { uid } from '../../utils/helpers';
 
 const emptyForm = {
@@ -15,6 +18,7 @@ const emptyForm = {
   description: '',
   projectId: '',
   assigneeId: '',
+  category: 'social',
   status: 'todo',
   priority: 'medium',
   dueDate: '',
@@ -31,10 +35,28 @@ export default function TaskFormModal() {
   const createTask = useTaskStore((s) => s.createTask);
   const updateTask = useTaskStore((s) => s.updateTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
+  const categoryConfig = useProjectCategoryStore((s) => s.config);
 
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [draftSubtask, setDraftSubtask] = useState('');
+
+  const categoryOptions = useMemo(() => {
+    const base = form.projectId
+      ? getProjectCategories(categoryConfig[form.projectId])
+      : TASK_CATEGORIES;
+    if (!form.category || base.some((category) => category.value === form.category)) {
+      return base;
+    }
+    return [
+      ...base,
+      {
+        value: form.category,
+        label: TASK_CATEGORY_MAP[form.category]?.label || form.category,
+        icon: null,
+      },
+    ];
+  }, [categoryConfig, form.projectId, form.category]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,15 +68,24 @@ export default function TaskFormModal() {
         description: task.description || '',
         projectId: task.projectId || '',
         assigneeId: task.assigneeId || '',
+        category: task.category || getTaskCategory(task),
         status: task.status || 'todo',
         priority: task.priority || 'medium',
         dueDate: task.dueDate || '',
         subtasks: (task.subtasks || []).map((s) => ({ ...s })),
       });
     } else {
-      setForm({ ...emptyForm, ...defaults });
+      const projectId = defaults.projectId || '';
+      const base = projectId
+        ? getProjectCategories(categoryConfig[projectId])
+        : TASK_CATEGORIES;
+      const chosen =
+        defaults.category && base.some((category) => category.value === defaults.category)
+          ? defaults.category
+          : base[0]?.value || 'social';
+      setForm({ ...emptyForm, ...defaults, projectId, category: chosen });
     }
-  }, [open, task, defaults]);
+  }, [open, task, defaults, categoryConfig]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -75,6 +106,7 @@ export default function TaskFormModal() {
       description: form.description,
       projectId: form.projectId || null,
       assigneeId: form.assigneeId || null,
+      category: form.category || null,
       status: form.status,
       priority: form.priority,
       dueDate: form.dueDate || null,
@@ -157,7 +189,19 @@ export default function TaskFormModal() {
           <Field label="Project">
             <Select
               value={form.projectId}
-              onChange={(e) => set('projectId', e.target.value)}
+              onChange={(e) => {
+                const nextProjectId = e.target.value;
+                const nextCategories = nextProjectId
+                  ? getProjectCategories(categoryConfig[nextProjectId])
+                  : TASK_CATEGORIES;
+                setForm((prev) => ({
+                  ...prev,
+                  projectId: nextProjectId,
+                  category: nextCategories.some((category) => category.value === prev.category)
+                    ? prev.category
+                    : nextCategories[0]?.value || '',
+                }));
+              }}
               options={[
                 { value: '', label: 'No project' },
                 ...projects.map((p) => ({ value: p.id, label: p.name })),
@@ -179,6 +223,16 @@ export default function TaskFormModal() {
               value={form.status}
               onChange={(e) => set('status', e.target.value)}
               options={TASK_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+            />
+          </Field>
+          <Field label="Category">
+            <Select
+              value={form.category || ''}
+              onChange={(e) => set('category', e.target.value)}
+              options={categoryOptions.map((category) => ({
+                value: category.value,
+                label: category.label,
+              }))}
             />
           </Field>
           <Field label="Priority">

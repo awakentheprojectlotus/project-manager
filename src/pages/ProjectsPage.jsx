@@ -162,7 +162,7 @@ export default function ProjectsPage() {
 
       <div className="flex items-center gap-2 rounded-xl border border-edge bg-surface px-4 py-2.5 text-[11px] text-muted">
         <FolderKanban className="h-3.5 w-3.5" />
-        Projects group tasks, teammates and deadlines. Progress is calculated from completed tasks.
+        Projects group tasks, teammates and maintenance areas. Use the status dots to spot what needs attention.
       </div>
     </div>
   );

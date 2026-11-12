@@ -1,4 +1,9 @@
 import {
+  BookOpen,
+  Bug,
+  Car,
+  Cpu,
+  Github,
   LayoutDashboard,
   ListChecks,
   FolderKanban,
@@ -7,6 +12,13 @@ import {
   BarChart3,
   Sparkles,
   Settings,
+  Share2,
+  Smartphone,
+  Monitor,
+  Package,
+  ShoppingCart,
+  Triangle,
+  UploadCloud,
 } from 'lucide-react';
 
 export const APP_NAME = 'Pulse';
@@ -183,3 +195,105 @@ export const AI_SUGGESTIONS = [
   'Mark the monthly performance report task as completed',
   'Move all overdue tasks to In Review',
 ];
+
+export const SPEECH_LANGUAGES = [
+  { value: 'en-US', label: 'English (United States)' },
+  { value: 'en-GB', label: 'English (United Kingdom)' },
+  { value: 'my-MM', label: 'Burmese' },
+  { value: 'th-TH', label: 'Thai' },
+  { value: 'zh-CN', label: 'Chinese (Simplified)' },
+  { value: 'ja-JP', label: 'Japanese' },
+  { value: 'ko-KR', label: 'Korean' },
+  { value: 'hi-IN', label: 'Hindi' },
+  { value: 'fr-FR', label: 'French' },
+  { value: 'es-ES', label: 'Spanish' },
+];
+
+export const TASK_CATEGORIES = [
+  {
+    value: 'social',
+    label: 'Social Media',
+    hint: '1 post / day',
+    icon: Share2,
+    iconClass: 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400',
+  },
+  {
+    value: 'bug',
+    label: 'Bug',
+    icon: Bug,
+    iconClass: 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400',
+  },
+  {
+    value: 'event',
+    label: 'Event',
+    icon: CalendarDays,
+    iconClass: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
+  },
+  {
+    value: 'playstore',
+    label: 'PlayStore Uploaded',
+    icon: UploadCloud,
+    iconClass: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
+  },
+  {
+    value: 'windows',
+    label: 'Windows Version',
+    icon: Monitor,
+    iconClass: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400',
+  },
+  {
+    value: 'android',
+    label: 'Android Version',
+    icon: Smartphone,
+    iconClass: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400',
+  },
+  {
+    value: 'documentation',
+    label: 'Documentation',
+    icon: BookOpen,
+    iconClass: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400',
+  },
+  {
+    value: 'github',
+    label: 'GitHub',
+    icon: Github,
+    iconClass: 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-300',
+  },
+  {
+    value: 'vercel',
+    label: 'Vercel',
+    icon: Triangle,
+    iconClass: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-500/10 dark:text-zinc-300',
+  },
+  {
+    value: 'firmware',
+    label: 'Firmware',
+    icon: Cpu,
+    iconClass: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400',
+  },
+  {
+    value: 'packaging',
+    label: 'Packaging',
+    icon: Package,
+    iconClass: 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400',
+  },
+  {
+    value: 'carframe',
+    label: 'CarFrame',
+    icon: Car,
+    iconClass: 'bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400',
+  },
+  {
+    value: 'shopping',
+    label: 'Shopping List',
+    icon: ShoppingCart,
+    iconClass: 'bg-lime-50 text-lime-600 dark:bg-lime-500/10 dark:text-lime-400',
+  },
+];
+
+export const TASK_CATEGORY_MAP = TASK_CATEGORIES.reduce(
+  (acc, category) => ({ ...acc, [category.value]: category }),
+  {}
+);
+
+export const TASK_CATEGORY_VALUES = TASK_CATEGORIES.map((category) => category.value);

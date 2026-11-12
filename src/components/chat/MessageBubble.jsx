@@ -1,12 +1,13 @@
 import { memo } from 'react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
-import { AlertCircle, Check, CheckCircle2, Info, Sparkles, X } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Info, Sparkles, Square, Volume2, X } from 'lucide-react';
 import { useChatStore } from '../../stores/chatStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTaskStore } from '../../stores/taskStore';
 import { useTeamStore } from '../../stores/teamStore';
 import { describeActions } from '../../services/aiActions';
+import { getAiProviderLabel } from '../../constants/ai';
 
 function RichText({ content }) {
   return (
@@ -41,7 +42,7 @@ function RichText({ content }) {
   );
 }
 
-function MessageBubble({ message }) {
+function MessageBubble({ message, onSpeak, speaking = false, ttsSupported = false }) {
   const confirmPending = useChatStore((s) => s.confirmPending);
   const cancelPending = useChatStore((s) => s.cancelPending);
   const projects = useProjectStore((s) => s.projects);
@@ -156,12 +157,30 @@ function MessageBubble({ message }) {
                   'rounded px-1 py-px font-medium',
                   message.engine === 'gemini'
                     ? 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300'
-                    : 'bg-elevated text-muted'
+                    : message.engine === 'opencode'
+                      ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300'
+                      : 'bg-elevated text-muted'
                 )}
               >
-                {message.engine === 'gemini' ? 'Gemini' : 'Local engine'}
+                {getAiProviderLabel(message.engine)}
               </span>
             </>
+          )}
+          {!isUser && ttsSupported && onSpeak && (
+            <button
+              type="button"
+              onClick={() => onSpeak(message)}
+              className={clsx(
+                'ml-0.5 grid h-5 w-5 place-items-center rounded transition',
+                speaking
+                  ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300'
+                  : 'text-muted hover:bg-elevated hover:text-ink'
+              )}
+              aria-label={speaking ? 'Stop reading this message' : 'Read this message aloud'}
+              title={speaking ? 'Stop reading' : 'Read aloud'}
+            >
+              {speaking ? <Square className="h-2.5 w-2.5" /> : <Volume2 className="h-3 w-3" />}
+            </button>
           )}
         </div>
       </div>

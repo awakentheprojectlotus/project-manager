@@ -21,6 +21,7 @@ import { useTaskStore } from '../stores/taskStore';
 import { useTeamStore } from '../stores/teamStore';
 import { getAiHealth } from '../services/apiService';
 import { getAtRiskProjects, getTaskCounts, getWorkload, getWorkspaceStats } from '../utils/analytics';
+import { getAiProviderLabel, DEFAULT_OPENCODE_MODEL } from '../constants/ai';
 
 export default function AssistantPage() {
   const location = useLocation();
@@ -31,7 +32,7 @@ export default function AssistantPage() {
   const tasks = useTaskStore((s) => s.tasks);
   const members = useTeamStore((s) => s.members);
 
-  const [health, setHealth] = useState({ configured: false, model: null, engine: 'local' });
+  const [health, setHealth] = useState({ configured: false, model: null, provider: null, engine: 'local' });
   const [checking, setChecking] = useState(true);
   const promptedRef = useRef(false);
 
@@ -60,6 +61,7 @@ export default function AssistantPage() {
   const risks = useMemo(() => getAtRiskProjects(projects, tasks), [projects, tasks]);
   const workload = useMemo(() => getWorkload(members, tasks), [members, tasks]);
   const overloaded = workload.filter((w) => w.utilization > 90 || w.open >= 5);
+  const providerLabel = getAiProviderLabel(health.provider);
 
   return (
     <div className="space-y-5">
@@ -84,7 +86,7 @@ export default function AssistantPage() {
                 <div>
                   <p className="text-[12.5px] font-semibold text-ink">AI connection</p>
                   <p className="text-[10.5px] text-muted">
-                    {checking ? 'Checking…' : health.configured ? 'Gemini proxied via server' : 'Local assistant engine'}
+                    {checking ? 'Checking…' : health.configured ? `${providerLabel} proxied via server` : 'Local assistant engine'}
                   </p>
                 </div>
               </div>
@@ -108,7 +110,7 @@ export default function AssistantPage() {
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[11.5px] font-medium text-ink">
-                  {health.configured ? `Gemini · ${health.model || 'gemini-2.0-flash'}` : 'Local deterministic engine'}
+                  {health.configured ? `${providerLabel} · ${health.model || (health.provider === 'opencode' ? DEFAULT_OPENCODE_MODEL : 'gemini-3.8-flash')}` : 'Local deterministic engine'}
                 </p>
                 <p className="text-[10px] text-muted">
                   {health.configured
@@ -118,11 +120,11 @@ export default function AssistantPage() {
               </div>
             </div>
 
-            {health.configured && (
+            {health.configured && health.provider === 'gemini' && (
               <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-relaxed text-muted">
                 <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
-                Google restricts Gemini by region. If replies come from the local engine, use a system-wide
-                VPN/proxy in a supported country or host the API proxy there.
+                Google restricts Gemini by region. If replies come from the local engine, switch to OpenCode or
+                use a supported-region proxy.
               </p>
             )}
 
@@ -130,14 +132,16 @@ export default function AssistantPage() {
               <div className="mt-3 rounded-xl bg-canvas/60 p-2.5">
                 <p className="flex items-center gap-1.5 text-[10.5px] font-medium text-ink">
                   <Terminal className="h-3 w-3" />
-                  Enable Gemini
+                  Enable AI (OpenCode)
                 </p>
                 <code className="mt-1.5 block rounded-lg bg-slate-950 px-2 py-1.5 text-[10px] text-emerald-300">
-                  GEMINI_API_KEY=your_key
+                  OPENCODE_API_KEY=your_key
+                  <br />
+                  OPENCODE_MODEL=deepseek-v4.1-flash
                 </code>
                 <p className="mt-1.5 text-[10px] leading-relaxed text-muted">
-                  Add it to <span className="font-medium text-ink">.env</span> and restart the dev server. The key never
-                  reaches the browser.
+                  Create a key in OpenCode Console, add it to <span className="font-medium text-ink">.env</span> and
+                  restart the dev server. Gemini can still be used by setting AI_PROVIDER=gemini.
                 </p>
               </div>
             )}

@@ -15,6 +15,26 @@ const PORT = Number(process.env.PORT || 3001);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 const GEMINI_API_BASE = (process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
+const OPENCODE_KEY = process.env.OPENCODE_API_KEY || '';
+const OPENCODE_BASE = (
+  process.env.OPENCODE_BASE_URL || 'https://opencode.ai/inference/go/openai/v1'
+).replace(/\/$/, '');
+const OPENCODE_MODEL = process.env.OPENCODE_MODEL || 'deepseek-v4.1-flash';
+
+const REQUESTED_PROVIDER = (process.env.AI_PROVIDER || '').toLowerCase();
+const AI_PROVIDER =
+  REQUESTED_PROVIDER === 'opencode' || REQUESTED_PROVIDER === 'gemini'
+    ? REQUESTED_PROVIDER
+    : OPENCODE_KEY
+      ? 'opencode'
+      : GEMINI_KEY
+        ? 'gemini'
+        : 'none';
+const AI_KEY =
+  AI_PROVIDER === 'opencode' ? OPENCODE_KEY : AI_PROVIDER === 'gemini' ? GEMINI_KEY : '';
+const AI_MODEL =
+  AI_PROVIDER === 'opencode' ? OPENCODE_MODEL : AI_PROVIDER === 'gemini' ? GEMINI_MODEL : null;
+const AI_LABEL = AI_PROVIDER === 'opencode' ? 'OpenCode' : AI_PROVIDER === 'gemini' ? 'Gemini' : 'AI';
 
 app.disable('x-powered-by');
 
@@ -106,7 +126,7 @@ function safeContext(context) {
 }
 
 
-function postJson(urlString, bodyString, timeoutMs = 45000) {
+function postJson(urlString, bodyString, timeoutMs = 45000, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     let url;
     try {
@@ -128,6 +148,7 @@ function postJson(urlString, bodyString, timeoutMs = 45000) {
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(bodyString),
+          ...extraHeaders,
         },
       },
       (response) => {
@@ -202,25 +223,105 @@ async function callGemini({ messages, context, today }) {
   return text;
 }
 
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function buildOpenAiMessages(messages, systemText) {
+  const result = [{ role: 'system', content: systemText }];
+  for (const msg of messages.slice(-16)) {
+    const role = msg.role === 'assistant' || msg.role === 'model' ? 'assistant' : 'user';
+    const content = String(msg.content || '').slice(0, 6000);
+    if (!content.trim()) continue;
+    const last = result[result.length - 1];
+    if (last.role === role && role !== 'system') {
+      last.content += '\n\n' + content;
+    } else {
+      result.push({ role, content });
+    }
+  }
+  return result;
+}
+
+async function callOpenCode({ messages, context, today, sessionId }) {
+  const systemText = `${SYSTEM_PROMPT}\n\nToday's date: ${today}\n\nLIVE WORKSPACE CONTEXT (source of truth):\n${safeContext(context)}`;
+  const baseBody = {
+    model: OPENCODE_MODEL,
+    messages: buildOpenAiMessages(messages, systemText),
+    temperature: 0.25,
+    max_tokens: 3000,
+    response_format: { type: 'json_object' },
+  };
+
+  const send = (body) =>
+    postJson(`${OPENCODE_BASE}/chat/completions`, JSON.stringify(body), 45000, {
+      Authorization: 'Bearer ' + OPENCODE_KEY,
+      'User-Agent': 'pulse-project-manager/1.0',
+      ...(sessionId ? { 'x-opencode-session': String(sessionId).slice(0, 80) } : {}),
+    });
+
+  let response = await send(baseBody);
+  let payload = parseJson(response.text);
+
+  // Fall back if a model does not support JSON response_format.
+  if (
+    response.status === 400 &&
+    /response_format|json_object/i.test(payload?.error?.message || response.text || '')
+  ) {
+    const { response_format, ...fallbackBody } = baseBody;
+    response = await send(fallbackBody);
+    payload = parseJson(response.text);
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    const detail =
+      payload?.error?.message || payload?.message || `OpenCode request failed (${response.status})`;
+    const error = new Error(detail);
+    error.status = response.status;
+    error.provider = 'opencode';
+    throw error;
+  }
+
+  const content = payload?.choices?.[0]?.message?.content;
+  const text = Array.isArray(content) ? content.map((part) => part?.text || '').join('') : content;
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new Error('OpenCode returned an empty response.');
+  }
+  return text;
+}
+
+async function callProvider(args) {
+  if (AI_PROVIDER === 'opencode') return callOpenCode(args);
+  if (AI_PROVIDER === 'gemini') return callGemini(args);
+  throw new Error('No AI provider is configured.');
+}
+
 app.get('/api/ai/health', (_req, res) => {
   res.json({
-    configured: Boolean(GEMINI_KEY),
-    model: GEMINI_MODEL,
-    engine: GEMINI_KEY ? 'gemini' : 'local',
-    base: GEMINI_API_BASE,
+    configured: Boolean(AI_KEY),
+    provider: AI_PROVIDER,
+    model: AI_MODEL,
+    engine: AI_KEY ? AI_PROVIDER : 'local',
+    base: AI_PROVIDER === 'opencode' ? OPENCODE_BASE : GEMINI_API_BASE,
+    providers: { opencode: Boolean(OPENCODE_KEY), gemini: Boolean(GEMINI_KEY) },
   });
 });
 
 app.post('/api/ai/chat', rateLimit, async (req, res) => {
-  if (!GEMINI_KEY) {
+  if (!AI_KEY) {
     return res.status(503).json({
       error: 'AI proxy is not configured.',
       code: 'NOT_CONFIGURED',
-      hint: 'Add GEMINI_API_KEY to .env and restart the server. The app will fall back to the local assistant engine.',
+      hint: 'Add OPENCODE_API_KEY (recommended) or GEMINI_API_KEY to .env and restart the server. The app will fall back to the local assistant engine.',
     });
   }
 
-  const { messages, context, today } = req.body || {};
+  const { messages, context, today, sessionId } = req.body || {};
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages[] is required.' });
   }
@@ -238,27 +339,60 @@ app.post('/api/ai/chat', rateLimit, async (req, res) => {
 
   try {
     const todayIso = typeof today === 'string' ? today.slice(0, 10) : new Date().toISOString().slice(0, 10);
-    const raw = await callGemini({ messages, context, today: todayIso });
+    const raw = await callProvider({ messages, context, today: todayIso, sessionId });
     const cleaned = raw.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
     let parsed;
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      return res.json({ reply: cleaned, actions: [], requiresConfirmation: false, engine: 'gemini' });
+      return res.json({ reply: cleaned, actions: [], requiresConfirmation: false, engine: AI_PROVIDER });
     }
 
     res.json({
       reply: typeof parsed.reply === 'string' ? parsed.reply : 'Done.',
       actions: Array.isArray(parsed.actions) ? parsed.actions : [],
       requiresConfirmation: Boolean(parsed.requiresConfirmation),
-      engine: 'gemini',
+      engine: AI_PROVIDER,
     });
   } catch (err) {
     const status = err.status === 429 ? 429 : 502;
-    const message =
-      (err.name === 'AbortError' || err.name === 'TimeoutError') ? 'Gemini request timed out.' : err.message || 'AI request failed.';
+    const timedOut = err.name === 'AbortError' || err.name === 'TimeoutError';
+    const message = timedOut
+      ? AI_LABEL + ' request timed out.'
+      : err.message || 'AI request failed.';
 
-    if (/location is not supported/i.test(message)) {
+    if (AI_PROVIDER === 'opencode') {
+      if (err.status === 401 || err.status === 403) {
+        return res.status(status).json({
+          error: 'OpenCode API key was rejected. Check OPENCODE_API_KEY in .env.',
+          detail: message,
+          code: 'AUTH_ERROR',
+        });
+      }
+      if (err.status === 402) {
+        return res.status(status).json({
+          error: 'OpenCode credits are exhausted. Add credits in OpenCode Console.',
+          detail: message,
+          code: 'INSUFFICIENT_CREDITS',
+        });
+      }
+      if (err.status === 429) {
+        return res.status(429).json({
+          error: 'OpenCode rate limit reached. Try again shortly.',
+          detail: message,
+          code: 'RATE_LIMITED',
+        });
+      }
+      if (err.status === 404) {
+        return res.status(status).json({
+          error: 'OpenCode model "' + OPENCODE_MODEL + '" is unavailable. Update OPENCODE_MODEL in .env.',
+          detail: message,
+          code: 'MODEL_UNAVAILABLE',
+        });
+      }
+    }
+
+    if (AI_PROVIDER === 'gemini' && /location is not supported/i.test(message)) {
       return res.status(status).json({
         error:
           'Gemini API is not available from this server location. The local assistant engine answered instead.',
@@ -271,7 +405,7 @@ app.post('/api/ai/chat', rateLimit, async (req, res) => {
     if (err.status === 404 || /no longer available|is not found for API version/i.test(message)) {
       return res.status(status).json({
         error:
-          'Gemini model "' + GEMINI_MODEL + '" is not available. Update GEMINI_MODEL in .env (for example gemini-3.8-flash).',
+          AI_LABEL + ' model "' + AI_MODEL + '" is not available. Update the model in .env.',
         detail: message,
         code: 'MODEL_UNAVAILABLE',
       });
@@ -300,5 +434,5 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Pulse AI proxy listening on http://localhost:${PORT}`);
-  console.log(`Engine: ${GEMINI_KEY ? `Gemini (${GEMINI_MODEL})` : 'NOT CONFIGURED — local fallback will be used'}`);
+  console.log(`Engine: ${AI_KEY ? `${AI_LABEL} (${AI_MODEL})` : 'NOT CONFIGURED — local fallback will be used'}`);
 });

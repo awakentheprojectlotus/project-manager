@@ -1,10 +1,24 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { ArrowUp, Eraser, Sparkles } from 'lucide-react';
+import { ArrowUp, Eraser, Mic, MicOff, Sparkles, VolumeX } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import { useChatStore } from '../../stores/chatStore';
 import { useUiStore } from '../../stores/uiStore';
 import { AI_SUGGESTIONS } from '../../constants';
+import { getAiProviderLabel } from '../../constants/ai';
+import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
+import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
+
+const SPEECH_ERRORS = {
+  'not-allowed': 'Microphone permission was denied. Allow mic access for this site and try again.',
+  'service-not-allowed': 'Microphone access is blocked by the browser.',
+  'audio-capture': 'No microphone was found. Check your device and try again.',
+  network: 'Speech recognition needs a network connection.',
+  'no-speech': 'No speech was detected. Tap the mic and try again.',
+  'language-not-supported':
+    'This language is not supported for voice input in your browser. Choose another language in Settings.',
+  'bad-grammar': 'Voice input could not understand that. Try again.',
+};
 
 function TypingIndicator() {
   return (
@@ -32,10 +46,76 @@ export default function ChatWindow() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearConversation = useChatStore((s) => s.clearConversation);
   const lastEngine = useChatStore((s) => s.lastEngine);
+  const prefs = useUiStore((s) => s.prefs);
   const confirm = useUiStore((s) => s.confirm);
+  const pushToast = useUiStore((s) => s.pushToast);
+
   const [draft, setDraft] = useState('');
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
+  const previousCountRef = useRef(messages.length);
+
+  const tts = useSpeechSynthesis({
+    lang: prefs.speechLang || 'en-US',
+    voiceURI: prefs.ttsVoiceURI || '',
+    rate: prefs.ttsRate || 1,
+  });
+
+  const send = (text) => {
+    const value = (text ?? draft).trim();
+    if (!value || isThinking) return;
+    if (tts.isSpeaking) tts.stop();
+    sendMessage(value);
+    setDraft('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleSpeechError = (code) => {
+    if (code === 'aborted') return;
+    pushToast({
+      type: code === 'no-speech' ? 'info' : 'error',
+      title: code === 'no-speech' ? 'No speech detected' : 'Voice input issue',
+      message: SPEECH_ERRORS[code] || 'Voice input could not start. Try again.',
+    });
+  };
+
+  const speech = useSpeechRecognition({
+    lang: prefs.speechLang || 'en-US',
+    onFinal: (transcript) => {
+      setDraft(transcript);
+      if (prefs.voiceAutoSend !== false) send(transcript);
+    },
+    onError: handleSpeechError,
+  });
+
+  const toggleListening = () => {
+    if (isThinking) return;
+    if (!speech.supported) {
+      pushToast({
+        type: 'info',
+        title: 'Voice input not supported',
+        message: 'Use Chrome or Edge for microphone input, or type your message instead.',
+      });
+      return;
+    }
+    if (speech.listening) speech.stop();
+    else speech.start();
+  };
+
+  const handleSpeak = (message) => {
+    if (!tts.supported) {
+      pushToast({
+        type: 'info',
+        title: 'Text-to-speech not supported',
+        message: 'This browser does not support spoken replies.',
+      });
+      return;
+    }
+    if (tts.speakingId === message.id) tts.stop();
+    else tts.speak(message.content, message.id);
+  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -43,21 +123,30 @@ export default function ChatWindow() {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages.length, isThinking]);
 
+  // Speak newly arrived assistant replies when auto-read is enabled.
+  useEffect(() => {
+    if (messages.length > previousCountRef.current) {
+      const last = messages[messages.length - 1];
+      const createdRecently =
+        last?.createdAt && Date.now() - new Date(last.createdAt).getTime() < 20000;
+      if (
+        last?.role === 'assistant' &&
+        createdRecently &&
+        prefs.ttsEnabled !== false &&
+        tts.supported &&
+        !isThinking
+      ) {
+        tts.speak(last.content, last.id);
+      }
+    }
+    previousCountRef.current = messages.length;
+  }, [messages, prefs.ttsEnabled, tts.supported, tts.speak, isThinking, tts]);
+
   const resize = () => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
-  };
-
-  const send = (text) => {
-    const value = (text ?? draft).trim();
-    if (!value || isThinking) return;
-    sendMessage(value);
-    setDraft('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
   };
 
   const handleClear = async () => {
@@ -67,7 +156,10 @@ export default function ChatWindow() {
       confirmLabel: 'Clear chat',
       tone: 'warning',
     });
-    if (ok) clearConversation();
+    if (!ok) return;
+    tts.stop();
+    speech.abort();
+    clearConversation();
   };
 
   return (
@@ -93,11 +185,24 @@ export default function ChatWindow() {
                 'hidden rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset sm:block',
                 lastEngine === 'gemini'
                   ? 'bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-300'
-                  : 'bg-elevated text-muted ring-edge'
+                  : lastEngine === 'opencode'
+                    ? 'bg-brand-50 text-brand-700 ring-brand-600/20 dark:bg-brand-500/10 dark:text-brand-300'
+                    : 'bg-elevated text-muted ring-edge'
               )}
             >
-              {lastEngine === 'gemini' ? 'Gemini connected' : 'Local engine'}
+              {lastEngine !== 'local' ? `${getAiProviderLabel(lastEngine)} connected` : 'Local engine'}
             </span>
+          )}
+          {tts.isSpeaking && (
+            <button
+              type="button"
+              onClick={tts.stop}
+              className="grid h-8 w-8 place-items-center rounded-lg text-brand-600 transition hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"
+              aria-label="Stop reading replies"
+              title="Stop reading"
+            >
+              <VolumeX className="h-4 w-4" />
+            </button>
           )}
           <button
             type="button"
@@ -113,7 +218,13 @@ export default function ChatWindow() {
 
       <div ref={scrollRef} className="scrollbar-thin min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onSpeak={handleSpeak}
+            speaking={tts.speakingId === message.id}
+            ttsSupported={tts.supported}
+          />
         ))}
         {isThinking && <TypingIndicator />}
       </div>
@@ -133,6 +244,26 @@ export default function ChatWindow() {
           ))}
         </div>
 
+        {speech.listening && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/80 px-2.5 py-1.5 text-[11px] text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+            </span>
+            <span className="font-medium">Listening</span>
+            <span className="min-w-0 flex-1 truncate text-rose-600/80 dark:text-rose-300/80">
+              {speech.interim || 'Speak now…'}
+            </span>
+            <button
+              type="button"
+              onClick={speech.stop}
+              className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20 transition hover:bg-white/60 dark:text-rose-200 dark:ring-rose-400/30"
+            >
+              Stop
+            </button>
+          </div>
+        )}
+
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -140,6 +271,28 @@ export default function ChatWindow() {
           }}
           className="flex items-end gap-2 rounded-2xl border border-edge bg-surface p-1.5 shadow-sm transition focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10"
         >
+          <button
+            type="button"
+            onClick={toggleListening}
+            disabled={isThinking}
+            className={clsx(
+              'grid h-9 w-9 shrink-0 place-items-center rounded-xl transition disabled:opacity-40',
+              speech.listening
+                ? 'bg-rose-600 text-white shadow-sm hover:bg-rose-700'
+                : 'border border-edge bg-surface text-muted hover:bg-canvas hover:text-ink'
+            )}
+            aria-label={speech.listening ? 'Stop voice input' : 'Start voice input'}
+            title={
+              !speech.supported
+                ? 'Voice input is not supported in this browser'
+                : speech.listening
+                  ? 'Stop listening'
+                  : 'Speak your message'
+            }
+          >
+            {speech.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </button>
+
           <textarea
             ref={textareaRef}
             rows={1}

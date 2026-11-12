@@ -18,14 +18,14 @@ export const getAiHealth = async () => {
     if (!res.ok) throw new Error('Health check failed');
     return await res.json();
   } catch {
-    return { configured: false, engine: 'local', reachable: false, model: null };
+    return { configured: false, engine: 'local', reachable: false, model: null, provider: null };
   }
 };
 
 let healthCache = null;
 let healthCacheAt = 0;
 
-const canUseGemini = async () => {
+const canUseAi = async () => {
   if (!healthCache || Date.now() - healthCacheAt > 60_000) {
     healthCache = await getAiHealth();
     healthCacheAt = Date.now();
@@ -33,9 +33,9 @@ const canUseGemini = async () => {
   return healthCache?.configured === true && healthCache?.reachable !== false;
 };
 
-export const requestGemini = async ({ history, context }) => {
-  if (!(await canUseGemini())) {
-    const error = new Error('Gemini is not configured on the server.');
+export const requestAi = async ({ history, context, sessionId }) => {
+  if (!(await canUseAi())) {
+    const error = new Error('AI is not configured on the server.');
     error.code = 'NOT_CONFIGURED';
     throw error;
   }
@@ -50,6 +50,7 @@ export const requestGemini = async ({ history, context }) => {
       })),
       context,
       today: new Date().toISOString().slice(0, 10),
+      sessionId,
     }),
   });
 
@@ -72,7 +73,7 @@ export const requestGemini = async ({ history, context }) => {
     reply: payload?.reply || '',
     actions: Array.isArray(payload?.actions) ? payload.actions : [],
     requiresConfirmation: Boolean(payload?.requiresConfirmation),
-    engine: 'gemini',
+    engine: payload?.engine || 'opencode',
   };
 };
 
@@ -83,6 +84,9 @@ export const exportWorkspace = async () => {
   const { useActivityStore } = await import('../stores/activityStore');
   const { useNotificationStore } = await import('../stores/notificationStore');
   const { useFileStore } = await import('../stores/fileStore');
+  const { useStatusLinkStore } = await import('../stores/statusLinkStore');
+  const { useProjectCategoryStore } = await import('../stores/projectCategoryStore');
+  const { useRequirementStore } = await import('../stores/requirementStore');
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -92,6 +96,9 @@ export const exportWorkspace = async () => {
     activity: useActivityStore.getState().entries,
     notifications: useNotificationStore.getState().notifications,
     projectFiles: useFileStore.getState().files,
+    statusLinks: useStatusLinkStore.getState().links,
+    projectCategories: useProjectCategoryStore.getState().config,
+    requirements: useRequirementStore.getState().requirements,
   };
 };
 
@@ -106,6 +113,9 @@ export const importWorkspace = async (payload) => {
   const { useActivityStore } = await import('../stores/activityStore');
   const { useNotificationStore } = await import('../stores/notificationStore');
   const { useFileStore } = await import('../stores/fileStore');
+  const { useStatusLinkStore } = await import('../stores/statusLinkStore');
+  const { useProjectCategoryStore } = await import('../stores/projectCategoryStore');
+  const { useRequirementStore } = await import('../stores/requirementStore');
 
   useProjectStore.getState().reset(payload.projects);
   useTaskStore.getState().reset(payload.tasks);
@@ -114,4 +124,7 @@ export const importWorkspace = async (payload) => {
   if (Array.isArray(payload.notifications))
     useNotificationStore.setState({ notifications: payload.notifications });
   useFileStore.getState().reset(Array.isArray(payload.projectFiles) ? payload.projectFiles : []);
+  useStatusLinkStore.getState().reset(payload.statusLinks);
+  useProjectCategoryStore.getState().reset(payload.projectCategories);
+  useRequirementStore.getState().reset(Array.isArray(payload.requirements) ? payload.requirements : []);
 };

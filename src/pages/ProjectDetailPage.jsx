@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ClipboardList,
   Clock,
   FolderKanban,
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Settings2,
   Trash2,
   UserPlus,
   Users,
@@ -31,15 +33,26 @@ import ActivityFeed from '../components/dashboard/ActivityFeed';
 import ProjectFiles from '../components/files/ProjectFiles';
 import ProjectFilesCard from '../components/files/ProjectFilesCard';
 import FileFormModal from '../components/files/FileFormModal';
+import CategoryStatusCards from '../components/projects/CategoryStatusCards';
+import CategoryTasksModal from '../components/projects/CategoryTasksModal';
+import ManageCategoriesModal from '../components/projects/ManageCategoriesModal';
+import RequirementsTab from '../components/requirements/RequirementsTab';
 import { useProjectStore } from '../stores/projectStore';
 import { useTaskStore } from '../stores/taskStore';
 import { useTeamStore } from '../stores/teamStore';
 import { useUiStore } from '../stores/uiStore';
 import { useActivityStore } from '../stores/activityStore';
 import { useFileStore } from '../stores/fileStore';
+import { useStatusLinkStore } from '../stores/statusLinkStore';
+import { useProjectCategoryStore } from '../stores/projectCategoryStore';
+import { useRequirementStore } from '../stores/requirementStore';
 import { filterTasks, sortTasks } from '../utils/filters';
-import { getProjectProgress, getProjectTasks, getTaskCounts } from '../utils/analytics';
+import { getProjectTasks, getTaskCounts } from '../utils/analytics';
+import { getCategoryStatus } from '../utils/categories';
+import { getProjectCategories } from '../utils/projectCategories';
 import { dueMeta, formatDate } from '../utils/date';
+
+const EMPTY_LINKS = {};
 
 const defaultFilters = {
   search: '',
@@ -54,13 +67,15 @@ export default function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const projects = useProjectStore((s) => s.projects);
-  const updateProject = useProjectStore((s) => s.updateProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const tasks = useTaskStore((s) => s.tasks);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const members = useTeamStore((s) => s.members);
   const activity = useActivityStore((s) => s.entries);
   const allFiles = useFileStore((s) => s.files);
+  const allRequirements = useRequirementStore((s) => s.requirements);
+  const projectStatusLinks = useStatusLinkStore((s) => (id ? s.links?.[id] : null));
+  const categoryConfig = useProjectCategoryStore((s) => (id ? s.config?.[id] : null));
   const openProjectForm = useUiStore((s) => s.openProjectForm);
   const openTaskForm = useUiStore((s) => s.openTaskForm);
   const openMemberDetail = useUiStore((s) => s.openMemberDetail);
@@ -70,12 +85,16 @@ export default function ProjectDetailPage() {
   const [tab, setTab] = useState('overview');
   const [view, setView] = useState('kanban');
   const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [categoryModal, setCategoryModal] = useState(null);
+  const [manageCardsOpen, setManageCardsOpen] = useState(false);
   const [filters, setFilters] = useState(defaultFilters);
 
   useEffect(() => {
     setTab('overview');
     setFilters(defaultFilters);
     setFileModalOpen(false);
+    setCategoryModal(null);
+    setManageCardsOpen(false);
   }, [id]);
 
   const project = projects.find((p) => p.id === id);
@@ -87,6 +106,15 @@ export default function ProjectDetailPage() {
   const projectFiles = useMemo(
     () => (project ? allFiles.filter((file) => file.projectId === project.id) : []),
     [allFiles, project]
+  );
+  const projectCategories = useMemo(() => getProjectCategories(categoryConfig), [categoryConfig]);
+  const projectRequirements = useMemo(
+    () => (project ? allRequirements.filter((item) => item.projectId === project.id) : []),
+    [allRequirements, project]
+  );
+  const categoryStatuses = useMemo(
+    () => projectCategories.map((category) => getCategoryStatus(projectTasks, category.value)),
+    [projectCategories, projectTasks]
   );
 
   if (!project) {
@@ -102,7 +130,6 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const progress = getProjectProgress(project, tasks);
   const counts = getTaskCounts(projectTasks);
   const projectMembers = project.memberIds.map((mid) => members.find((m) => m.id === mid)).filter(Boolean);
   const projectActivity = activity.filter((a) => a.projectId === project.id);
@@ -133,11 +160,6 @@ export default function ProjectDetailPage() {
     if (!ok) return;
     deleteTask(task.id);
     pushToast({ type: 'info', title: 'Task deleted', message: `'${task.title}' was removed.` });
-  };
-
-  const changeStatus = (status) => {
-    updateProject(project.id, { status });
-    pushToast({ type: 'success', title: 'Status updated', message: `'${project.name}' status changed.` });
   };
 
   return (
@@ -188,36 +210,41 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted">Overall progress</span>
-            <span className="text-sm font-bold text-ink">{progress}%</span>
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Maintenance status</h2>
+            <p className="text-[11px] text-muted">
+              Click a card to view its tasks and add work. Green = complete or no tasks, amber = active, red = due soon.
+            </p>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted">
-            <span>
-              {counts.completed}/{counts.total} tasks done
-            </span>
-            <span className="text-muted/40">·</span>
-            <select
-              value={project.status}
-              onChange={(e) => changeStatus(e.target.value)}
-              className="rounded-lg border border-edge bg-surface px-2 py-1 text-[11px] text-ink outline-none"
-              aria-label="Change project status"
-            >
-              {['planning', 'in-progress', 'on-hold', 'completed'].map((status) => (
-                <option key={status} value={status}>
-                  {status
-                    .split('-')
-                    .map((s) => s[0].toUpperCase() + s.slice(1))
-                    .join(' ')}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 text-[10px] text-muted">
+              <span className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Complete
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Active
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                Due soon
+              </span>
+            </div>
+            <Button variant="secondary" size="sm" icon={Settings2} onClick={() => setManageCardsOpen(true)}>
+              Manage cards
+            </Button>
           </div>
         </div>
-        <ProgressBar value={progress} color={project.color} size="lg" className="mt-2.5" />
-      </Card>
+        <CategoryStatusCards
+          statuses={categoryStatuses}
+          categories={projectCategories}
+          onOpen={setCategoryModal}
+          links={projectStatusLinks || EMPTY_LINKS}
+        />
+      </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
@@ -243,6 +270,7 @@ export default function ProjectDetailPage() {
           { value: 'overview', label: 'Overview', icon: LayoutDashboard },
           { value: 'tasks', label: 'Tasks', icon: ListChecks, count: projectTasks.length },
           { value: 'files', label: 'Files', icon: Paperclip, count: projectFiles.length },
+          { value: 'requirements', label: 'Requirements', icon: ClipboardList, count: projectRequirements.length },
           { value: 'team', label: 'Team', icon: Users, count: projectMembers.length },
           { value: 'activity', label: 'Activity', icon: Clock },
         ]}
@@ -488,6 +516,10 @@ export default function ProjectDetailPage() {
         <ProjectFiles project={project} files={projectFiles} onAdd={() => setFileModalOpen(true)} />
       )}
 
+      {tab === 'requirements' && (
+        <RequirementsTab project={project} requirements={projectRequirements} />
+      )}
+
       {tab === 'activity' && (
         <ActivityFeed entries={projectActivity} members={members} projects={projects} />
       )}
@@ -498,6 +530,24 @@ export default function ProjectDetailPage() {
         projectId={project.id}
         projectName={project.name}
       />
+
+      {categoryModal && (
+        <CategoryTasksModal
+          category={categoryModal}
+          categoryMeta={projectCategories.find((category) => category.value === categoryModal) || null}
+          project={project}
+          tasks={projectTasks}
+          onClose={() => setCategoryModal(null)}
+        />
+      )}
+
+      {manageCardsOpen && (
+        <ManageCategoriesModal
+          project={project}
+          tasks={projectTasks}
+          onClose={() => setManageCardsOpen(false)}
+        />
+      )}
     </div>
   );
 }

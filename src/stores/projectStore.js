@@ -5,6 +5,9 @@ import { useActivityStore } from './activityStore';
 import { useNotificationStore } from './notificationStore';
 import { useTaskStore } from './taskStore';
 import { useFileStore } from './fileStore';
+import { useStatusLinkStore } from './statusLinkStore';
+import { useProjectCategoryStore } from './projectCategoryStore';
+import { useRequirementStore } from './requirementStore';
 import { useUiStore } from './uiStore';
 import { uid } from '../utils/helpers';
 import { PROJECT_COLORS, PROJECT_STATUS_MAP } from '../constants';
@@ -125,6 +128,9 @@ export const useProjectStore = create(
         set({ projects: get().projects.filter((p) => p.id !== id) });
         useTaskStore.getState().deleteTasksByProject(id);
         useFileStore.getState().deleteFilesByProject(id);
+        useStatusLinkStore.getState().deleteLinksByProject(id);
+        useProjectCategoryStore.getState().deleteByProject(id);
+        useRequirementStore.getState().deleteByProject(id);
         useActivityStore.getState().log({
           type: 'project',
           message: `Project '${project.name}' was deleted`,

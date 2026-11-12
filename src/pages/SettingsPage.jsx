@@ -14,21 +14,25 @@ import {
   KeyRound,
   Lock,
   LogOut,
+  Mic,
+
   Moon,
   Pencil,
   RefreshCw,
   RotateCcw,
+  Square,
   Sun,
   Trash2,
   Upload,
   UserRound,
+  Volume2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import PageHeader from '../components/ui/PageHeader';
 import Card, { CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Avatar from '../components/ui/Avatar';
-import { Select, Switch } from '../components/ui/Input';
+import { Field, Select, Switch } from '../components/ui/Input';
 import { useUiStore } from '../stores/uiStore';
 import { useTeamStore } from '../stores/teamStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -40,6 +44,9 @@ import { flushWorkspaceSync, pushWorkspaceToFirestore } from '../services/worksp
 import { exportWorkspace, getAiHealth, importWorkspace } from '../services/apiService';
 import { resetDemoData, clearWorkspace } from '../utils/resetWorkspace';
 import { formatDate, timeAgo, todayISO } from '../utils/date';
+import { getAiProviderLabel, DEFAULT_OPENCODE_MODEL } from '../constants/ai';
+import { SPEECH_LANGUAGES } from '../constants';
+import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 
 const FIRESTORE_RULES = "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /workspaces/main {\n      allow read, write: if request.auth != null;\n    }\n    match /{document=**} {\n      allow read, write: if false;\n    }\n  }\n}";
 
@@ -78,7 +85,16 @@ export default function SettingsPage() {
   const syncError = useSyncStore((s) => s.error);
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
-  const [health, setHealth] = useState({ configured: false, model: null });
+  const tts = useSpeechSynthesis({
+    lang: prefs.speechLang || 'en-US',
+    voiceURI: prefs.ttsVoiceURI || '',
+    rate: prefs.ttsRate || 1,
+  });
+  const voiceInputSupported =
+    typeof window !== 'undefined' &&
+    Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const [health, setHealth] = useState({ configured: false, model: null, provider: null });
   const [checking, setChecking] = useState(true);
   const [pushing, setPushing] = useState(false);
   const fileRef = useRef(null);
@@ -495,7 +511,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader
             title="AI integration"
-            subtitle="Gemini proxy and assistant engine"
+            subtitle="OpenCode / Gemini provider and assistant engine"
             icon={Bot}
             action={
               <button
@@ -513,12 +529,16 @@ export default function SettingsPage() {
               <span className={clsx('h-2.5 w-2.5 shrink-0 rounded-full', health.configured ? 'bg-emerald-500' : 'bg-amber-500')} />
               <div className="min-w-0 flex-1">
                 <p className="text-[12.5px] font-medium text-ink">
-                  {checking ? 'Checking connection…' : health.configured ? 'Gemini configured' : 'Local engine active'}
+                  {checking
+                    ? 'Checking connection…'
+                    : health.configured
+                      ? `${getAiProviderLabel(health.provider)} configured`
+                      : 'Local engine active'}
                 </p>
                 <p className="text-[10.5px] text-muted">
                   {health.configured
-                    ? `Model: ${health.model || 'gemini-2.0-flash'} · proxied server-side`
-                    : 'Add an API key to .env to enable Gemini'}
+                    ? `Model: ${health.model || (health.provider === 'opencode' ? DEFAULT_OPENCODE_MODEL : 'gemini-3.8-flash')} · proxied server-side`
+                    : 'Add an OpenCode API key to .env to enable AI'}
                 </p>
               </div>
             </div>
@@ -529,14 +549,20 @@ export default function SettingsPage() {
                 Server-side configuration
               </p>
               <code className="mt-2 block rounded-lg bg-slate-950 px-2.5 py-2 text-[10.5px] leading-relaxed text-emerald-300">
-                GEMINI_API_KEY=your_key_here
+                OPENCODE_API_KEY=your_key_here
                 <br />
-                GEMINI_MODEL=gemini-3.8-flash
+                OPENCODE_MODEL=deepseek-v4.1-flash
               </code>
               <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                Place these in <span className="font-medium text-ink">.env</span> at the project root and restart
-                <span className="font-medium text-ink"> npm run dev</span>. The browser only calls your local proxy at
-                <span className="font-medium text-ink"> /api/ai</span>.
+                Create a key in OpenCode Console and add these to{' '}
+                <span className="font-medium text-ink">.env</span>, then restart{' '}
+                <span className="font-medium text-ink">npm run dev</span>. The browser only calls your local proxy
+                at <span className="font-medium text-ink">/api/ai</span>. Set{' '}
+                <span className="font-medium text-ink">AI_PROVIDER=gemini</span> to use Gemini instead.
+              </p>
+              <p className="mt-2 text-[10px] leading-relaxed text-muted">
+                OpenCode Go subscriptions use the Go endpoint by default. For Zen pay-as-you-go credits, set
+                OPENCODE_BASE_URL=https://opencode.ai/inference/openai/v1.
               </p>
             </div>
 
@@ -547,12 +573,102 @@ export default function SettingsPage() {
             </p>
           </div>
         </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader
+            title="Voice & speech"
+            subtitle="Microphone input and spoken AI replies"
+            icon={Mic}
+          />
+          <div className="grid gap-5 px-5 pb-5 pt-4 sm:grid-cols-2">
+            <div className="divide-y divide-edge">
+              <Switch
+                label="Speak AI replies"
+                description="Read new assistant messages aloud automatically."
+                checked={prefs.ttsEnabled !== false}
+                onChange={(value) => updatePrefs({ ttsEnabled: value })}
+              />
+              <Switch
+                label="Send voice messages automatically"
+                description="Send the transcript when you stop speaking. Turn off to review and edit first."
+                checked={prefs.voiceAutoSend !== false}
+                onChange={(value) => updatePrefs({ voiceAutoSend: value })}
+              />
+            </div>
+            <div className="space-y-3">
+              <Field label="Speech language" hint="Used for voice input and spoken replies.">
+                <Select
+                  value={prefs.speechLang || 'en-US'}
+                  onChange={(event) => updatePrefs({ speechLang: event.target.value })}
+                  options={SPEECH_LANGUAGES}
+                />
+              </Field>
+              <Field label="Reply voice" hint="System voices provided by your browser.">
+                <Select
+                  value={prefs.ttsVoiceURI || ''}
+                  onChange={(event) => updatePrefs({ ttsVoiceURI: event.target.value })}
+                  options={[
+                    { value: '', label: 'System default' },
+                    ...tts.voices.map((voice) => ({
+                      value: voice.voiceURI,
+                      label: `${voice.name} (${voice.lang})`,
+                    })),
+                  ]}
+                />
+              </Field>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted">Speech rate</span>
+                  <span className="text-[11px] text-muted">
+                    {Number(prefs.ttsRate || 1).toFixed(2)}x
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.75"
+                  max="1.4"
+                  step="0.05"
+                  value={prefs.ttsRate || 1}
+                  onChange={(event) => updatePrefs({ ttsRate: Number(event.target.value) })}
+                  className="w-full accent-brand-600"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={Volume2}
+                  onClick={() =>
+                    tts.speak('Hi! This is how Pulse will read assistant replies.', 'settings-test')
+                  }
+                  disabled={!tts.supported}
+                >
+                  Test voice
+                </Button>
+                {tts.isSpeaking && (
+                  <Button variant="ghost" size="sm" icon={Square} onClick={tts.stop}>
+                    Stop
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-edge px-5 py-3 text-[10.5px] leading-relaxed text-muted">
+            {tts.supported
+              ? `Text-to-speech ready${tts.voices.length ? ` · ${tts.voices.length} system voices` : ''}.`
+              : 'Text-to-speech is not supported in this browser.'}{' '}
+            {voiceInputSupported
+              ? 'Microphone input is supported.'
+              : 'Voice input needs Chrome or Edge.'}{' '}
+            Speech recognition may require a network connection; Burmese support depends on the browser.
+          </div>
+        </Card>
       </div>
 
       <Card>
         <CardHeader
           title="Data & storage"
-          subtitle="Your workspace lives in this browser"
+          subtitle="Local cache and Firestore sync"
           icon={HardDrive}
           action={
             <span className="rounded-full bg-elevated px-2 py-0.5 text-[10px] font-medium text-muted">
@@ -575,8 +691,9 @@ export default function SettingsPage() {
               ))}
             </div>
             <p className="mt-3 text-[11px] leading-relaxed text-muted">
-              Data persists automatically in LocalStorage under the <span className="font-medium text-ink">pulse-*</span> keys.
-              Refreshing the browser keeps your projects, tasks, people and chat history.
+              Data is cached in this browser under the <span className="font-medium text-ink">pulse-*</span> keys and
+              synced to Firestore when connected. Refreshing keeps your work; Firestore remains the shared source of
+              truth.
             </p>
           </div>
 

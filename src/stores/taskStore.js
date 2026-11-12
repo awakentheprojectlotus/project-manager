@@ -27,6 +27,7 @@ export const useTaskStore = create(
           description: data.description?.trim() || '',
           projectId: data.projectId || null,
           assigneeId: data.assigneeId || null,
+          category: data.category || null,
           status,
           priority: data.priority || 'medium',
           dueDate: data.dueDate || null,

@@ -6,8 +6,20 @@ import Dropdown from '../ui/Dropdown';
 import { AvatarGroup } from '../ui/Avatar';
 import { PriorityBadge, StatusBadge } from '../ui/Badge';
 import { daysUntil, formatDate } from '../../utils/date';
+import { getCategoryStatus } from '../../utils/categories';
+import { useProjectCategoryStore } from '../../stores/projectCategoryStore';
+import { getProjectCategories } from '../../utils/projectCategories';
+
+const MINI_TONES = {
+  success: 'bg-emerald-500',
+  warning: 'bg-amber-500',
+  danger: 'bg-rose-500',
+  empty: 'bg-slate-300 dark:bg-slate-600',
+};
 
 export default function ProjectCard({ project, tasks, members, onEdit, onDelete }) {
+  const categoryConfig = useProjectCategoryStore((s) => s.config?.[project.id]);
+  const projectCategories = getProjectCategories(categoryConfig);
   const projectTasks = tasks.filter((t) => t.projectId === project.id);
   const done = projectTasks.filter((t) => t.status === 'completed').length;
   const openTasks = projectTasks.length - done;
@@ -18,6 +30,10 @@ export default function ProjectCard({ project, tasks, members, onEdit, onDelete 
     .map((id) => members.find((m) => m.id === id))
     .filter(Boolean);
   const diff = daysUntil(project.dueDate);
+  const categoryStatuses = projectCategories.map((category) => ({
+    category,
+    status: getCategoryStatus(projectTasks, category.value),
+  }));
 
   return (
     <Card className="group flex flex-col p-4 transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-pop dark:hover:border-brand-500/30">
@@ -88,7 +104,45 @@ export default function ProjectCard({ project, tasks, members, onEdit, onDelete 
         </span>
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-edge pt-3">
+      <div className="mt-3">
+        <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+          Status
+        </p>
+        {categoryStatuses.length === 0 ? (
+          <p className="text-[10px] text-muted">No status cards</p>
+        ) : (
+        <div className="grid grid-cols-7 justify-items-center gap-x-1.5 gap-y-2">
+          {categoryStatuses.map(({ category, status }) => {
+            const Icon = category.icon;
+            return (
+              <span
+                key={category.value}
+                role="img"
+                data-category={category.value}
+                data-tone={status.tone}
+                aria-label={`${category.label}: ${status.statusLabel}, ${status.total} tasks`}
+                title={`${category.label}: ${status.statusLabel} · ${status.total} tasks (${status.open} open)`}
+                className="flex flex-col items-center gap-0.5"
+              >
+                <span
+                  className={clsx(
+                    'grid h-8 w-8 place-items-center rounded-full text-white shadow-sm ring-1 ring-inset ring-black/10',
+                    MINI_TONES[status.tone] || MINI_TONES.empty
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="text-[9px] font-semibold leading-none text-muted">
+                  {status.total}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between border-t border-edge pt-3">
         {projectMembers.length ? (
           <AvatarGroup members={projectMembers} max={4} size="sm" />
         ) : (

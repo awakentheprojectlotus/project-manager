@@ -8,6 +8,9 @@ import { useTeamStore } from '../stores/teamStore';
 import { useActivityStore } from '../stores/activityStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useFileStore } from '../stores/fileStore';
+import { useStatusLinkStore } from '../stores/statusLinkStore';
+import { useProjectCategoryStore } from '../stores/projectCategoryStore';
+import { useRequirementStore } from '../stores/requirementStore';
 import { useChatStore } from '../stores/chatStore';
 import { useUiStore } from '../stores/uiStore';
 import { createSeed } from '../data/seed';
@@ -53,6 +56,13 @@ const pickWorkspace = (source = {}) => ({
   projectFiles: (Array.isArray(source.projectFiles) ? source.projectFiles : []).filter(
     (file) => file && typeof file.url === 'string' && !file.url.startsWith('data:')
   ),
+  requirements: Array.isArray(source.requirements) ? source.requirements : [],
+  statusLinks:
+    source.statusLinks && typeof source.statusLinks === 'object' ? source.statusLinks : {},
+  projectCategories:
+    source.projectCategories && typeof source.projectCategories === 'object'
+      ? source.projectCategories
+      : {},
   chatMessages: Array.isArray(source.chatMessages) ? source.chatMessages.slice(-120) : [],
 });
 
@@ -64,6 +74,9 @@ const collect = () =>
     activity: useActivityStore.getState().entries,
     notifications: useNotificationStore.getState().notifications,
     projectFiles: useFileStore.getState().files,
+    requirements: useRequirementStore.getState().requirements,
+    statusLinks: useStatusLinkStore.getState().links,
+    projectCategories: useProjectCategoryStore.getState().config,
     chatMessages: useChatStore.getState().messages,
   });
 
@@ -77,6 +90,9 @@ const applyWorkspace = (data) => {
     useActivityStore.setState({ entries: workspace.activity });
     useNotificationStore.setState({ notifications: workspace.notifications });
     useFileStore.setState({ files: workspace.projectFiles });
+    useStatusLinkStore.setState({ links: workspace.statusLinks });
+    useProjectCategoryStore.setState({ config: workspace.projectCategories });
+    useRequirementStore.setState({ requirements: workspace.requirements });
 
     const members = useTeamStore.getState().members;
     const authEmail = useAuthStore.getState().user?.email?.toLowerCase();
@@ -196,6 +212,9 @@ const subscribeToStores = () => {
     useActivityStore.subscribe(scheduleSave),
     useNotificationStore.subscribe(scheduleSave),
     useFileStore.subscribe(scheduleSave),
+    useStatusLinkStore.subscribe(scheduleSave),
+    useProjectCategoryStore.subscribe(scheduleSave),
+    useRequirementStore.subscribe(scheduleSave),
     useChatStore.subscribe(scheduleSave),
     useUiStore.subscribe(scheduleSave),
   ];
