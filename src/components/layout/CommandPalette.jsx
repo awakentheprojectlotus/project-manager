@@ -17,6 +17,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useTaskStore } from '../../stores/taskStore';
 import { useTeamStore } from '../../stores/teamStore';
 import { normalize } from '../../utils/match';
+import { useScrollLock } from '../../hooks/useScrollLock';
 import { StatusBadge } from '../ui/Badge';
 import Avatar from '../ui/Avatar';
 import { formatDate } from '../../utils/date';
@@ -36,6 +37,7 @@ export default function CommandPalette() {
   const listRef = useRef(null);
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
+  useScrollLock(open);
 
   useEffect(() => {
     if (open) {
@@ -43,15 +45,6 @@ export default function CommandPalette() {
       setIndex(0);
       setTimeout(() => inputRef.current?.focus(), 30);
     }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
   }, [open]);
 
   const q = normalize(query);

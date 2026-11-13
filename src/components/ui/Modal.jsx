@@ -1,8 +1,8 @@
-﻿import { useEffect } from 'react';
-import { createPortal } from 'react-dom';
+﻿import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { X } from 'lucide-react';
 import { useKeyDown } from '../../hooks/useKeyboard';
+import { useScrollLock } from '../../hooks/useScrollLock';
 
 const SIZES = {
   sm: 'sm:max-w-md',
@@ -25,15 +25,7 @@ export default function Modal({
   bodyClassName,
 }) {
   useKeyDown('Escape', onClose, open);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
+  useScrollLock(open);
 
   if (!open) return null;
 

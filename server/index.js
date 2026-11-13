@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import https from 'node:https';
+import { buildReminderMessage, isValidTelegramChatId } from './telegram.js';
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ const OPENCODE_BASE = (
   process.env.OPENCODE_BASE_URL || 'https://opencode.ai/inference/go/openai/v1'
 ).replace(/\/$/, '');
 const OPENCODE_MODEL = process.env.OPENCODE_MODEL || 'deepseek-v4.1-flash';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 
 const REQUESTED_PROVIDER = (process.env.AI_PROVIDER || '').toLowerCase();
 const AI_PROVIDER =
@@ -312,6 +314,62 @@ app.get('/api/ai/health', (_req, res) => {
   });
 });
 
+
+app.get('/api/telegram/health', (_req, res) => {
+  res.json({ configured: Boolean(TELEGRAM_BOT_TOKEN) });
+});
+
+app.post('/api/telegram/reminder', rateLimit, async (req, res) => {
+  if (!TELEGRAM_BOT_TOKEN) {
+    return res.status(503).json({
+      error: 'Telegram bot is not configured. Add TELEGRAM_BOT_TOKEN to .env and restart the server.',
+      code: 'NOT_CONFIGURED',
+    });
+  }
+
+  const { chatId, memberName, tasks } = req.body || {};
+  if (!isValidTelegramChatId(chatId)) {
+    return res.status(400).json({
+      error: 'Invalid Telegram chat ID. Use a numeric chat ID or an @username.',
+      code: 'INVALID_CHAT_ID',
+    });
+  }
+  if (!Array.isArray(tasks)) {
+    return res.status(400).json({ error: 'tasks[] is required.', code: 'INVALID_TASKS' });
+  }
+
+  const text = buildReminderMessage({ memberName, tasks });
+  try {
+    const response = await postJson(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      JSON.stringify({
+        chat_id: String(chatId).trim(),
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+      20000
+    );
+    const payload = parseJson(response.text) || {};
+    if (response.status < 200 || response.status >= 300 || payload.ok === false) {
+      const description = payload?.description || `Telegram request failed (${response.status})`;
+      let code = 'TELEGRAM_ERROR';
+      if (response.status === 401) code = 'INVALID_TOKEN';
+      else if (response.status === 400) code = 'CHAT_NOT_FOUND';
+      else if (response.status === 403) code = 'BOT_BLOCKED';
+      else if (response.status === 429) code = 'RATE_LIMITED';
+      return res.status(502).json({ error: description, code });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    const timedOut = error.name === 'TimeoutError';
+    res.status(502).json({
+      error: timedOut ? 'Telegram request timed out.' : error.message || 'Telegram request failed.',
+      code: 'NETWORK_ERROR',
+    });
+  }
+});
+
 app.post('/api/ai/chat', rateLimit, async (req, res) => {
   if (!AI_KEY) {
     return res.status(503).json({
@@ -434,5 +492,6 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Pulse AI proxy listening on http://localhost:${PORT}`);
+  console.log(`Telegram reminders: ${TELEGRAM_BOT_TOKEN ? 'configured' : 'NOT CONFIGURED'}`);
   console.log(`Engine: ${AI_KEY ? `${AI_LABEL} (${AI_MODEL})` : 'NOT CONFIGURED — local fallback will be used'}`);
 });

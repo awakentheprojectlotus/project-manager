@@ -13,6 +13,7 @@ import { useSyncStore } from '../../stores/syncStore';
 import { useDeadlineNotifications } from '../../hooks/useDeadlineNotifications';
 import { isFirebaseConfigured } from '../../services/firebase';
 import { retryWorkspaceSync } from '../../services/workspaceSync';
+import { getScrollLockCount, resetBodyScrollLock } from '../../utils/scrollLock';
 
 export default function AppLayout() {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -28,6 +29,14 @@ export default function AppLayout() {
   useEffect(() => {
     setMobileNav(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Safety net for a scroll lock left behind by an unmounted overlay.
+    const timer = setTimeout(() => {
+      if (getScrollLockCount() === 0 && !document.querySelector('[role="dialog"]')) {
+        resetBodyScrollLock();
+      }
+    }, 80);
+    return () => clearTimeout(timer);
   }, [location.pathname, setMobileNav]);
 
   useEffect(() => {

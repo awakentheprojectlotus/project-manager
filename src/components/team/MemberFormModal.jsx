@@ -17,7 +17,7 @@ export default function MemberFormModal() {
   const removeMember = useTeamStore((s) => s.removeMember);
   const tasks = useTaskStore((s) => s.tasks);
 
-  const [form, setForm] = useState({ name: '', email: '', role: '', capacity: 40 });
+  const [form, setForm] = useState({ name: '', email: '', role: '', capacity: 40, telegramChatId: '' });
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -28,6 +28,7 @@ export default function MemberFormModal() {
       email: member?.email || '',
       role: member?.role || '',
       capacity: member?.capacity || 40,
+      telegramChatId: member?.telegramChatId || '',
     });
   }, [open, member]);
 
@@ -48,6 +49,7 @@ export default function MemberFormModal() {
       email: form.email.trim(),
       role: form.role.trim() || 'Contributor',
       capacity: Number(form.capacity) || 40,
+      telegramChatId: form.telegramChatId.trim(),
     };
     if (member) {
       updateMember(member.id, payload);
@@ -120,6 +122,13 @@ export default function MemberFormModal() {
             value={form.email}
             onChange={(e) => set('email', e.target.value)}
             placeholder="name@company.com"
+          />
+        </Field>
+        <Field label="Telegram chat ID" hint="Optional. The member must start a chat with your Telegram bot first. Use a numeric chat ID (e.g. 123456789) or @username.">
+          <Input
+            value={form.telegramChatId}
+            onChange={(e) => set('telegramChatId', e.target.value)}
+            placeholder="123456789 or @username"
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">

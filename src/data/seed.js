@@ -18,6 +18,7 @@ export const createSeed = () => {
       avatarColor: 0,
       status: 'active',
       capacity: 40,
+      telegramChatId: '',
       joinedAt: daysFromToday(-420),
     },
     {
@@ -28,6 +29,7 @@ export const createSeed = () => {
       avatarColor: 1,
       status: 'active',
       capacity: 40,
+      telegramChatId: '',
       joinedAt: daysFromToday(-310),
     },
     {
@@ -38,6 +40,7 @@ export const createSeed = () => {
       avatarColor: 2,
       status: 'active',
       capacity: 36,
+      telegramChatId: '',
       joinedAt: daysFromToday(-260),
     },
     {
@@ -48,6 +51,7 @@ export const createSeed = () => {
       avatarColor: 3,
       status: 'active',
       capacity: 40,
+      telegramChatId: '',
       joinedAt: daysFromToday(-150),
     },
   ];

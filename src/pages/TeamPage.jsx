@@ -9,6 +9,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Send,
   Trash2,
   UserRound,
   Users,
@@ -28,6 +29,9 @@ import { useProjectStore } from '../stores/projectStore';
 import { useUiStore } from '../stores/uiStore';
 import { getWorkload, getWorkspaceStats } from '../utils/analytics';
 import { normalize } from '../utils/match';
+import { TASK_STATUS_MAP, PRIORITY_MAP } from '../constants';
+import { dueMeta } from '../utils/date';
+import { sendTelegramReminder } from '../services/telegramService';
 
 export default function TeamPage() {
   const members = useTeamStore((s) => s.members);
@@ -40,6 +44,7 @@ export default function TeamPage() {
   const pushToast = useUiStore((s) => s.pushToast);
 
   const [search, setSearch] = useState('');
+  const [sendingId, setSendingId] = useState(null);
   const workload = useMemo(() => getWorkload(members, tasks), [members, tasks]);
   const stats = getWorkspaceStats(projects, tasks);
   const visible = workload.filter((w) => !search || normalize(`${w.member.name} ${w.member.role}`).includes(normalize(search)));
@@ -57,6 +62,71 @@ export default function TeamPage() {
     if (!ok) return;
     removeMember(member.id);
     pushToast({ type: 'info', title: 'Member removed', message: `${member.name} was removed from the team.` });
+  };
+
+  const sendReminder = async (entry) => {
+    const { member } = entry;
+
+    if (!member.telegramChatId) {
+      pushToast({
+        type: 'info',
+        title: 'Telegram not linked',
+        message: 'Add a Telegram chat ID to this member first, then send the reminder.',
+      });
+      openMemberForm(member);
+      return;
+    }
+
+    const openTasks = (entry.assigned || [])
+      .filter((task) => task.status !== 'completed')
+      .sort((a, b) => {
+        const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return aDue - bDue;
+      });
+
+    if (!openTasks.length) {
+      pushToast({
+        type: 'info',
+        title: 'No open tasks',
+        message: `${member.name} is all caught up — nothing to remind them about.`,
+      });
+      return;
+    }
+
+    setSendingId(member.id);
+    try {
+      await sendTelegramReminder({
+        chatId: member.telegramChatId,
+        memberName: member.name,
+        tasks: openTasks.slice(0, 20).map((task) => ({
+          title: task.title,
+          project: projects.find((project) => project.id === task.projectId)?.name || '',
+          status: TASK_STATUS_MAP[task.status]?.label || task.status,
+          priority: PRIORITY_MAP[task.priority]?.label || task.priority,
+          due: task.dueDate ? dueMeta(task.dueDate).label : '',
+        })),
+      });
+      pushToast({
+        type: 'success',
+        title: 'Reminder sent',
+        message: `Telegram reminder sent to ${member.name}.`,
+      });
+    } catch (error) {
+      const message =
+        error.code === 'NOT_CONFIGURED'
+          ? 'Add TELEGRAM_BOT_TOKEN to .env and restart the server to enable reminders.'
+          : error.code === 'CHAT_NOT_FOUND'
+            ? 'Telegram could not find this chat. Ask the member to start the bot, then check the chat ID.'
+            : error.code === 'INVALID_TOKEN'
+              ? 'The Telegram bot token is invalid. Update TELEGRAM_BOT_TOKEN.'
+              : error.code === 'BOT_BLOCKED'
+                ? 'The member has blocked the Telegram bot.'
+                : error.message;
+      pushToast({ type: 'error', title: 'Reminder failed', message });
+    } finally {
+      setSendingId(null);
+    }
   };
 
   return (
@@ -174,6 +244,13 @@ export default function TeamPage() {
                   </p>
                 )}
 
+                <p className="mt-1.5 flex items-center gap-1.5 truncate text-[11px] text-muted">
+                  <Send className="h-3 w-3 shrink-0" />
+                  <span className="truncate">
+                    {member.telegramChatId || 'Telegram not linked'}
+                  </span>
+                </p>
+
                 <div className="mt-3 grid grid-cols-3 gap-1.5">
                   <div className="rounded-lg bg-canvas/60 px-2 py-1.5 text-center">
                     <p className="text-sm font-bold text-ink">{entry.open}</p>
@@ -205,13 +282,25 @@ export default function TeamPage() {
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => openMemberDetail(member.id)}
-                  className="mt-3 w-full rounded-lg border border-edge py-1.5 text-[11px] font-medium text-muted transition hover:border-brand-200 hover:bg-brand-50/40 hover:text-brand-700 dark:hover:border-brand-500/30 dark:hover:bg-brand-500/5 dark:hover:text-brand-300"
-                >
-                  View workload & tasks
-                </button>
+                <div className="mt-3 space-y-1.5">
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    icon={Send}
+                    className="w-full"
+                    loading={sendingId === member.id}
+                    onClick={() => sendReminder(entry)}
+                  >
+                    Send reminder
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => openMemberDetail(member.id)}
+                    className="w-full rounded-lg border border-edge py-1.5 text-[11px] font-medium text-muted transition hover:border-brand-200 hover:bg-brand-50/40 hover:text-brand-700 dark:hover:border-brand-500/30 dark:hover:bg-brand-500/5 dark:hover:text-brand-300"
+                  >
+                    View workload & tasks
+                  </button>
+                </div>
               </Card>
             );
           })}

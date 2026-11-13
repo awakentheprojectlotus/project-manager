@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
 import clsx from 'clsx';
-import { Briefcase, CheckCircle2, Clock, Pencil, Trash2, UserRound } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, Pencil, Send, Trash2, UserRound } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Avatar from '../ui/Avatar';
@@ -60,6 +60,10 @@ export default function MemberDetailModal() {
               <h3 className="text-lg font-semibold text-ink">{member.name}</h3>
               <p className="text-sm text-muted">{member.role}</p>
               <p className="mt-0.5 text-xs text-muted">{member.email || 'No email on file'}</p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+                <Send className="h-3 w-3" />
+                {member.telegramChatId ? `Telegram: ${member.telegramChatId}` : 'Telegram not linked'}
+              </p>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1 rounded-full bg-elevated px-2 py-0.5 text-[11px] text-muted ring-1 ring-inset ring-edge">
                   <Briefcase className="h-3 w-3" />

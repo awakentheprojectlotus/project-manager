@@ -21,6 +21,7 @@ export const useTeamStore = create(
           avatarColor: existing.length % 7,
           status: 'active',
           capacity: Number(data.capacity) || 40,
+          telegramChatId: data.telegramChatId?.trim() || '',
           joinedAt: todayISO(),
         };
         set({ members: [...existing, member] });

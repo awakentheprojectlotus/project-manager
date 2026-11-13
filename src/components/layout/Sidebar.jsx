@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
 import {
@@ -10,6 +9,7 @@ import {
 } from 'lucide-react';
 import { NAV_ITEMS } from '../../constants';
 import { useUiStore } from '../../stores/uiStore';
+import { useScrollLock } from '../../hooks/useScrollLock';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTaskStore } from '../../stores/taskStore';
 import { useTeamStore } from '../../stores/teamStore';
@@ -48,20 +48,13 @@ export default function Sidebar({ mobile = false }) {
   const tasks = useTaskStore((s) => s.tasks);
   const members = useTeamStore((s) => s.members);
 
+  useScrollLock(Boolean(mobile));
+
   const isCollapsed = !mobile && collapsed;
   const counts = getTaskCounts(tasks);
   const user = members.find((m) => m.id === currentUserId);
   const overall = counts.completionRate;
   const activeProjects = projects.filter((p) => p.status === 'in-progress').length;
-
-  useEffect(() => {
-    if (!mobile) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [mobile]);
 
   return (
     <aside
