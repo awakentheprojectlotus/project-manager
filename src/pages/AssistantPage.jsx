@@ -72,7 +72,7 @@ export default function AssistantPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="h-[calc(100vh-16rem)] min-h-[540px] xl:h-[calc(100vh-15rem)]">
+        <div className="h-[calc(100dvh-17rem)] min-h-[520px] xl:h-[calc(100dvh-15rem)]">
           <ChatWindow />
         </div>
 

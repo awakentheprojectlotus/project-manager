@@ -27,7 +27,7 @@ const TONES = {
 
 export default function CategoryStatusCards({ statuses, categories = [], onOpen, links = {} }) {
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {statuses.map((status) => {
         const category = categories.find((item) => item.value === status.category);
         if (!category) return null;

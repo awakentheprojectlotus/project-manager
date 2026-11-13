@@ -56,14 +56,14 @@ export function AvatarGroup({ members = [], max = 4, size = 'sm' }) {
           key={member.id}
           member={member}
           size={size}
-          className="ring-2 ring-surface"
+          className="ring-0"
           title={member.name}
         />
       ))}
       {extra > 0 && (
         <span
           className={clsx(
-            'inline-flex items-center justify-center rounded-full bg-elevated font-semibold text-muted ring-2 ring-surface',
+            'inline-flex items-center justify-center rounded-full bg-elevated font-semibold text-muted ring-0',
             SIZES[size]
           )}
           title={`${extra} more`}
