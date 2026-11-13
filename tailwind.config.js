@@ -56,6 +56,14 @@ export default {
           '0%, 100%': { opacity: '0.35', transform: 'translateY(0)' },
           '50%': { opacity: '1', transform: 'translateY(-3px)' },
         },
+        'gear-spin': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+        'gear-blink': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.2' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.25s ease-out both',
@@ -63,6 +71,8 @@ export default {
         'slide-in-right': 'slide-in-right 0.25s ease-out both',
         'slide-in-left': 'slide-in-left 0.25s ease-out both',
         'pulse-dot': 'pulse-dot 1.1s ease-in-out infinite',
+        'gear-spin': 'gear-spin 3s linear infinite',
+        'gear-blink': 'gear-blink 1s ease-in-out infinite',
       },
     },
   },

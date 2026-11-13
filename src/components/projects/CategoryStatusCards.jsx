@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ExternalLink } from 'lucide-react';
+import { Cog, ExternalLink } from 'lucide-react';
 import { dueMeta } from '../../utils/date';
 
 const TONES = {
@@ -50,29 +50,33 @@ export default function CategoryStatusCards({ statuses, categories = [], onOpen,
                 onOpen(status.category);
               }
             }}
-            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-edge bg-surface text-left shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 dark:hover:border-brand-500/30"
+            className="group relative flex h-full min-h-[160px] cursor-pointer overflow-hidden rounded-2xl border border-edge bg-surface text-left shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 dark:hover:border-brand-500/30"
           >
             <span className={clsx('absolute inset-x-0 top-0 z-10 h-[3px]', tone.bar)} />
 
-            <div className="flex min-h-[118px] items-stretch">
-              <div className="flex w-14 shrink-0 items-center justify-center bg-slate-900 text-white dark:bg-slate-700">
-                <Icon className="h-9 w-9" />
-              </div>
+            <div className="flex w-14 shrink-0 items-center justify-center self-stretch bg-slate-900 text-white dark:bg-slate-700">
+              <Icon className="h-9 w-9" />
+            </div>
 
-              <div className="flex min-w-0 flex-1 flex-col p-3">
-                <div className="flex items-start justify-between gap-1.5">
-                  <p className="min-w-0 text-[11.5px] font-semibold leading-snug text-ink">
-                    {category.label}
-                  </p>
-                  <span
+            <div className="flex min-w-0 flex-1 flex-col p-3">
+                <p className="min-w-0 text-[11.5px] font-semibold leading-snug text-ink">
+                  {category.label}
+                </p>
+                <div
+                  className={clsx(
+                    'mt-1 flex items-center justify-end gap-1.5 pr-0.5 text-[10px] font-medium',
+                    tone.text
+                  )}
+                >
+                  <Cog
+                    aria-hidden="true"
                     className={clsx(
-                      'ml-auto flex shrink-0 items-center gap-1 pr-0.5 text-[9px] font-medium',
-                      tone.text
+                      'gear-status-icon h-5 w-5 shrink-0',
+                      status.tone === 'success' && 'animate-gear-spin',
+                      status.tone === 'danger' && 'animate-gear-blink'
                     )}
-                  >
-                    <span className={clsx('h-1.5 w-1.5 rounded-full', tone.dot)} />
-                    {status.statusLabel}
-                  </span>
+                  />
+                  <span>{status.statusLabel}</span>
                 </div>
 
                 <p className="mt-1 text-[9.5px] text-muted">
@@ -118,22 +122,23 @@ export default function CategoryStatusCards({ statuses, categories = [], onOpen,
                   </p>
                 )}
 
-                {link && (
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    className="mt-auto inline-flex w-fit items-center gap-1 rounded-md bg-elevated px-1.5 py-0.5 text-[9px] font-medium text-brand-600 ring-1 ring-inset ring-edge transition hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
-                    title={link}
-                  >
-                    <ExternalLink className="h-2.5 w-2.5" />
-                    Link
-                  </a>
-                )}
+                <div className="mt-auto flex min-h-[30px] items-end">
+                  {link && (
+                    <a
+                      href={link}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                      title={link}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Link
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
           </div>
         );
       })}

@@ -14,6 +14,8 @@ import { useRequirementStore } from '../stores/requirementStore';
 import { useChatStore } from '../stores/chatStore';
 import { useUiStore } from '../stores/uiStore';
 import { createSeed } from '../data/seed';
+import { TEAM_AUTH_EMAILS } from '../constants';
+import { normalize } from '../utils/match';
 
 const CONNECT_TIMEOUT = 15000;
 const SAVE_DEBOUNCE = 650;
@@ -94,15 +96,62 @@ const applyWorkspace = (data) => {
     useProjectCategoryStore.setState({ config: workspace.projectCategories });
     useRequirementStore.setState({ requirements: workspace.requirements });
 
-    const members = useTeamStore.getState().members;
-    const authEmail = useAuthStore.getState().user?.email?.toLowerCase();
-    const preferred = authEmail
-      ? members.find((m) => m.email && m.email.toLowerCase() === authEmail)
+    let members = useTeamStore.getState().members;
+    const authUser = useAuthStore.getState().user;
+    const authEmail = authUser?.email?.toLowerCase() || '';
+
+    // Upgrade placeholder seed emails to the Firebase login emails.
+    const upgradedMembers = members.map((member) => {
+      const loginEmail = TEAM_AUTH_EMAILS[member.id];
+      if (!loginEmail) return member;
+      const email = (member.email || '').toLowerCase();
+      if (!email || email.endsWith('@pulse.app')) {
+        return { ...member, email: loginEmail };
+      }
+      return member;
+    });
+    if (upgradedMembers.some((member, index) => member !== members[index])) {
+      useTeamStore.setState({ members: upgradedMembers });
+      members = upgradedMembers;
+    }
+
+    let preferred = authEmail
+      ? members.find((member) => member.email?.toLowerCase() === authEmail)
       : null;
+
+    if (!preferred && authEmail) {
+      const mappedId = Object.keys(TEAM_AUTH_EMAILS).find(
+        (id) => TEAM_AUTH_EMAILS[id].toLowerCase() === authEmail
+      );
+      preferred = mappedId ? members.find((member) => member.id === mappedId) : null;
+    }
+
+    if (!preferred && authUser?.displayName) {
+      const displayName = normalize(authUser.displayName);
+      preferred =
+        members.find((member) => normalize(member.name) === displayName) || null;
+    }
+
+    if (preferred && authEmail && preferred.email?.toLowerCase() !== authEmail) {
+      useTeamStore.getState().updateMember(preferred.id, { email: authUser.email });
+      preferred = { ...preferred, email: authUser.email };
+    }
+
+    if (!preferred && authUser?.email) {
+      preferred = useTeamStore.getState().addMember({
+        name: authUser.displayName?.trim() || authUser.email.split('@')[0],
+        email: authUser.email,
+        role: 'Team Member',
+      });
+      members = useTeamStore.getState().members;
+    }
+
     const localCurrent = useUiStore.getState().currentUserId;
     const targetUser =
       preferred?.id ||
-      (members.some((m) => m.id === localCurrent) ? localCurrent : members[0]?.id || '');
+      (members.some((member) => member.id === localCurrent)
+        ? localCurrent
+        : members[0]?.id || '');
     useUiStore.getState().setCurrentUser(targetUser);
 
     if (workspace.chatMessages.length) {
@@ -263,7 +312,7 @@ export const startWorkspaceSync = () => {
           const seed = createSeed();
           applyWorkspace({ ...seed, chatMessages: local.chatMessages });
         } else {
-          lastSerialized = JSON.stringify(local);
+          applyWorkspace(local);
         }
 
         subscribeToStores();
@@ -288,6 +337,7 @@ export const startWorkspaceSync = () => {
       }
       subscribeToStores();
       useSyncStore.getState().markSynced();
+      scheduleSave();
     },
     (error) => {
       clearConnectTimer();

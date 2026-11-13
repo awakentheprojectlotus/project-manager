@@ -1,4 +1,5 @@
 import { daysFromToday } from '../utils/date';
+import { TEAM_AUTH_EMAILS } from '../constants';
 
 const dt = (days, hour = 10, minute = 0) => {
   const d = new Date();
@@ -12,7 +13,7 @@ export const createSeed = () => {
     {
       id: 'tm_kaung',
       name: 'Kaung Moon San',
-      email: 'kaung.moonsan@pulse.app',
+      email: TEAM_AUTH_EMAILS.tm_kaung,
       role: 'Social Media Manager',
       avatarColor: 0,
       status: 'active',
@@ -22,7 +23,7 @@ export const createSeed = () => {
     {
       id: 'tm_yan',
       name: 'Yan Aung Moe',
-      email: 'yan.aungmoe@pulse.app',
+      email: TEAM_AUTH_EMAILS.tm_yan,
       role: 'Content Creator',
       avatarColor: 1,
       status: 'active',
@@ -32,7 +33,7 @@ export const createSeed = () => {
     {
       id: 'tm_shine',
       name: 'Shine Thet Aung',
-      email: 'shine.thetaung@pulse.app',
+      email: TEAM_AUTH_EMAILS.tm_shine,
       role: 'Graphic Designer',
       avatarColor: 2,
       status: 'active',
@@ -42,7 +43,7 @@ export const createSeed = () => {
     {
       id: 'tm_antt',
       name: 'Antt Hein',
-      email: 'antt.hein@pulse.app',
+      email: TEAM_AUTH_EMAILS.tm_antt,
       role: 'Marketing Analyst',
       avatarColor: 3,
       status: 'active',

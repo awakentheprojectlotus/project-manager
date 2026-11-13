@@ -127,3 +127,10 @@
 .dark .recharts-tooltip-cursor {
   fill: rgb(var(--muted) / 0.12);
 }
+
+
+.gear-status-icon {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+}

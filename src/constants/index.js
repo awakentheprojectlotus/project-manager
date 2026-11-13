@@ -23,6 +23,13 @@ import {
 
 export const APP_NAME = 'Pulse';
 
+export const TEAM_AUTH_EMAILS = {
+  tm_kaung: 'kms@gmail.com',
+  tm_yan: 'yanaungmoe@gmail.com',
+  tm_shine: 'shinethetaung@gmail.com',
+  tm_antt: 'antthein@gmail.com',
+};
+
 export const NAV_ITEMS = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/tasks', label: 'My Tasks', icon: ListChecks },
